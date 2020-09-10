@@ -82,7 +82,7 @@ func main() {
 	for _, file := range FILES {
 		go func(fileName string) {
 			defer wg.Done()
-			log.Infof("Begin downloading %s", fileName)
+			log.Debugf("Begin downloading %s", fileName)
 
 			u, err := url.Parse(hostURL)
 			if err != nil {
@@ -99,7 +99,7 @@ func main() {
 				log.WithError(err).Error("cannot save a content")
 				return
 			}
-			log.Infof("Finished writing %s", fileName)
+			log.Debugf("Finished writing %s", fileName)
 		}(file)
 	}
 	// waiting until all tasks are completed

@@ -8,6 +8,7 @@ from typing import Optional
 import aiohttp
 import click
 import uvloop
+import logging
 from aiohttp import TCPConnector
 from attr import dataclass
 
@@ -21,6 +22,7 @@ FILES = [
     "0f132134b2474cbd858559ed979835a3.MOV",
 ]
 
+logger = logging.getLogger('__name__')
 
 @dataclass
 class Result:
@@ -32,7 +34,7 @@ async def download_video(file_name: str, connector: TCPConnector) -> Result:
     """
     Download a content
     """
-    click.secho(f"Begin downloading {file_name}", fg="yellow")
+    logger.debug(f"Begin downloading {file_name}")
     url = f"{HOST_URL}{file_name}"
     timeout = aiohttp.ClientTimeout(total=10)
     async with aiohttp.ClientSession(
@@ -52,7 +54,7 @@ async def write_to_file(tmpdirname: str, content: bytes) -> None:
     filename = os.path.join(tmpdirname, f"async_{str(uuid.uuid4())}.mov")
     with open(filename, "wb") as video_file:
         video_file.write(content)
-        click.secho(f"Finished writing {filename}", fg="green")
+        logger.debug(f"Finished writing {filename}")
 
 
 async def web_scrape_task(
