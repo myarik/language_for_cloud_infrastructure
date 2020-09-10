@@ -1,8 +1,6 @@
 package main
 
 import (
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -10,6 +8,9 @@ import (
 	"path"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 var FILES = []string{
@@ -28,7 +29,7 @@ func init() {
 
 //downloadContent downloads a content
 func downloadContent(url string) (body []byte, err error) {
-	client := &http.Client{Timeout: time.Second * 5}
+	client := &http.Client{Timeout: time.Second * 10}
 	resp, err := client.Get(url)
 	if err != nil {
 		return body, err
