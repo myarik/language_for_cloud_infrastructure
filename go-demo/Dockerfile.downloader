@@ -11,7 +11,7 @@ COPY go.mod go.sum ./
 RUN /usr/local/go/bin/go mod download
 
 # Copy the source from the current directory to the Working Directory inside the container
-COPY firstresponse/main.go .
+COPY downloader/main.go .
 # Build the Go app
 RUN \
 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -o go-demo -ldflags "-X main.revision=0.0.1 -s -w" main.go
@@ -20,5 +20,9 @@ GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -o go-demo -ldflags "-X main.
 FROM alpine:3.7 as app
 
 COPY --from=build-backend /usr/src/app/go-demo /usr/bin/go-demo
+
+# Copy the content file
+COPY content_file.txt /content_file.txt
+ENV CONTENT_FILE=/content_file.txt
 
 CMD ["/usr/bin/go-demo"]
