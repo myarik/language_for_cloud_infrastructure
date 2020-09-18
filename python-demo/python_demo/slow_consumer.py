@@ -1,58 +1,71 @@
 import asyncio
 import os
+import sys
 import tempfile
 import time
 import uuid
+from typing import List
 
+import aiofiles
 import aiohttp
 import click
 import uvloop
+from loguru import logger
 
-HOST_URL = os.environ.get("API_HOST_URL")
-
-FILES = [
-    "0cf50f1c99234954b00340471538ce9d.MOV",
-    "0db9a58b669048dc999eb8f11f7ba424.MOV",
-    "0d38ceda70b14ccfaf6960514615757f.MOV",
-    "0CB55372-0173-49F7-9EAF-6CF1A40382C5.MOV",
-    "0f132134b2474cbd858559ed979835a3.MOV",
-]
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
-async def download_video(
-    file_name: str, queue: asyncio.Queue, connector: aiohttp.TCPConnector
+async def content_producer(
+    source_file: str, queue: asyncio.Queue, connector: aiohttp.TCPConnector
 ) -> None:
     """
     Download a content
     """
-    click.secho(f"Begin downloading {file_name}", fg="yellow")
-    url = f"{HOST_URL}{file_name}"
-    async with aiohttp.ClientSession(
-        connector=connector, timeout=TIMEOUT, connector_owner=False
-    ) as session:
-        try:
-            async with session.get(url) as resp:
-                body = await resp.read()
-                # put the item in the queue
-                await queue.put(body)
-                click.secho(f"File {file_name} downloaded", fg="yellow")
-        except asyncio.TimeoutError:
-            click.secho(f"Error download a {file_name}", fg="red")
+    for url in await read_file(source_file):
+        logger.debug(f"Begin downloading {url}")
+        async with aiohttp.ClientSession(
+            connector=connector, timeout=TIMEOUT, connector_owner=False
+        ) as session:
+            try:
+                async with session.get(url) as resp:
+                    body = await resp.read()
+                    # put the item in the queue
+                    await queue.put(body)
+            except asyncio.TimeoutError as err:
+                logger.error(
+                    f"Cannot download a content, url: {url} error: {type(err).__name__}"
+                )
 
 
-async def write_to_file(queue: asyncio.Queue, tmpdir: str) -> None:
+async def content_consumer(worker_id: int, queue: asyncio.Queue, tmpdir: str) -> None:
     """
     Save a content to the localstorage
     """
     while True:
         content = await queue.get()
+        # Add timeout to see how it works
+        if os.environ.get("DEBUG", False):
+            await asyncio.sleep(1 + (1 * worker_id))
+
         filename = os.path.join(tmpdir, f"async_{str(uuid.uuid4())}.mov")
-        with open(filename, "wb") as video_file:
-            video_file.write(content)
-            click.secho(f"Finished writing {filename}", fg="green")
+
+        async with aiofiles.open(filename, "wb") as video_file:
+            await video_file.write(content)
+            logger.debug(f"[WORKER {worker_id}] Finished writing {filename}")
+
         queue.task_done()
+
+
+async def read_file(source_file: str) -> List[str]:
+    """
+    Read urls
+    """
+    async with aiofiles.open(source_file, mode="r") as f:
+        content = await f.read()
+    return [url for url in content.split()]
 
 
 @click.command()
@@ -61,7 +74,7 @@ def main() -> None:
     The scraper gets data from sources and saves them to our local machine.
     This scraper has only three simultaneous consumers to prevent the storage overload
 
-    To use this script, you should set the environment variable API_HOST_URL.
+    To use this script, you should set the environment variable CONTENT_FILE.
     Then run `python -m python_demo.slow_consumer`.
     """
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -70,20 +83,29 @@ def main() -> None:
 
 async def async_main() -> None:
     s = time.perf_counter()
-    queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=100)
+
+    is_debug_level = os.environ.get("DEBUG", False)
+    if is_debug_level:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    source_file = os.environ.get("CONTENT_FILE", None)
+    if not source_file:
+        logger.error("cannot find the CONTENT_FILE environment variable")
+        return
+
+    queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=3)
     connector = aiohttp.TCPConnector(limit=5)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create three worker tasks to process the queue concurrently.
         tasks = []
-        for _ in range(3):
-            task = asyncio.create_task(write_to_file(queue, tmpdir))
+        for index in range(3):
+            task = asyncio.create_task(content_consumer(index, queue, tmpdir))
             tasks.append(task)
 
-        # Wait until the tasks is fully processed.s
-        await asyncio.gather(
-            *[download_video(file_name, queue, connector) for file_name in FILES]
-        )
+        # Wait until the tasks is fully processed
+        await asyncio.gather(content_producer(source_file, queue, connector))
         # Wait until the queue is fully processed.
         await queue.join()
 
@@ -95,7 +117,7 @@ async def async_main() -> None:
 
     await connector.close()
     elapsed = time.perf_counter() - s
-    click.secho(f"Execution time: {elapsed:0.2f} seconds.", fg="bright_blue")
+    logger.info(f"Execution time: {elapsed:0.2f} seconds.")
 
 
 if __name__ == "__main__":
