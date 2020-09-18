@@ -60,23 +60,26 @@ async def web_scrape_task(url: str, tmpdirname: str, connector: TCPConnector) ->
         )
 
 
+async def read_file(source_file: str) -> List[str]:
+    """
+    Read urls
+    """
+    async with aiofiles.open(source_file, mode="r") as f:
+        content = await f.read()
+    return [url for url in content.split()]
+
+
 @click.command()
 def main() -> None:
     """
     This is the simple web scraper.
     The scraper gets data from sources and saves them to our local machine
 
-    To use this script, you should set the environment variable API_HOST_URL.
+    To use this script, you should set the environment variable CONTENT_FILE.
     Then run `python -m python_demo.downloader`.
     """
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     asyncio.run(async_main())
-
-
-async def read_file(source_file: str) -> List[str]:
-    async with aiofiles.open(source_file, mode="r") as f:
-        content = await f.read()
-    return [url for url in content.split()]
 
 
 async def async_main() -> None:
