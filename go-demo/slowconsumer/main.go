@@ -31,7 +31,7 @@ func contentProducer(sourceFile string) <-chan []byte {
 
 		for scanner.Scan() {
 			sourceUrl := scanner.Text()
-			client := &http.Client{Timeout: time.Second * 5}
+			client := &http.Client{Timeout: time.Second * 10}
 			resp, err := client.Get(sourceUrl)
 			if err != nil {
 				log.WithError(err).Error("cannot connect to a host")
@@ -57,7 +57,7 @@ func contentConsumer(done chan<- struct{}, bodyCh <-chan []byte, tmpDir string, 
 	for data := range bodyCh {
 		// Add timeout to see how it works
 		if log.IsLevelEnabled(log.DebugLevel) {
-			time.Sleep(3 * time.Second)
+			time.Sleep(time.Duration(1 + (1 * workerID)) * time.Second)
 		}
 
 		contentFile, err := ioutil.TempFile(tmpDir, "go_*.mov")
