@@ -31,4 +31,8 @@ RUN poetry config virtualenvs.create false \
 # Creating folders, and files for a project:
 COPY . /usr/src/app
 
-CMD [ "python", "-m", "python_demo.first_response"]
+# Copy the content file
+COPY content_file.txt /content_file.txt
+ENV CONTENT_FILE=/content_file.txt
+
+CMD [ "python", "-m", "python_demo.downloader"]
