@@ -13,7 +13,7 @@ const FILES = [
 
 async function fetchFile(filename) {
     return new Promise((resolve, reject) => {
-        console.log(`Begin downloading: ${filename}`);
+        console.debug(`Begin downloading: ${filename}`);
 
         http.get(HOST_URL + filename, res => {
             if (res.statusCode !== 200) {
@@ -36,7 +36,7 @@ async function fetchFile(filename) {
         try {
             const body = await fetchFile(name)
             await fs.writeFile(filename, body);
-            console.log(`Finished writing: ${filename}`)
+            console.debug(`Finished writing: ${filename}`)
         } catch (e) {
             console.log(`Error download: ${e.message}`);
         }

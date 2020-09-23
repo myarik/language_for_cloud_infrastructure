@@ -1,25 +1,21 @@
 import asyncio
 import os
+import sys
 import tempfile
 import time
 import uuid
-from typing import Optional
+from typing import Optional, List
 
+import aiofiles
 import aiohttp
 import click
 import uvloop
 from aiohttp import TCPConnector
 from attr import dataclass
+from loguru import logger
 
-HOST_URL = os.environ.get("API_HOST_URL")
-
-FILES = [
-    "0cf50f1c99234954b00340471538ce9d.MOV",
-    "0db9a58b669048dc999eb8f11f7ba424.MOV",
-    "0d38ceda70b14ccfaf6960514615757f.MOV",
-    "0CB55372-0173-49F7-9EAF-6CF1A40382C5.MOV",
-    "0f132134b2474cbd858559ed979835a3.MOV",
-]
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 
 @dataclass
@@ -28,12 +24,11 @@ class Result:
     error: Optional[Exception] = None
 
 
-async def download_video(file_name: str, connector: TCPConnector) -> Result:
+async def download_video(url: str, connector: TCPConnector) -> Result:
     """
     Download a content
     """
-    click.secho(f"Begin downloading {file_name}", fg="yellow")
-    url = f"{HOST_URL}{file_name}"
+    logger.debug(f"Begin downloading {url}")
     timeout = aiohttp.ClientTimeout(total=10)
     async with aiohttp.ClientSession(
         connector=connector, timeout=timeout, connector_owner=False
@@ -50,19 +45,28 @@ async def write_to_file(tmpdirname: str, content: bytes) -> None:
     Save a content to the localstorage
     """
     filename = os.path.join(tmpdirname, f"async_{str(uuid.uuid4())}.mov")
-    with open(filename, "wb") as video_file:
-        video_file.write(content)
-        click.secho(f"Finished writing {filename}", fg="green")
+    async with aiofiles.open(filename, "wb") as video_file:
+        await video_file.write(content)
+        logger.debug(f"Finished writing {filename}")
 
 
-async def web_scrape_task(
-    file_name: str, tmpdirname: str, connector: TCPConnector
-) -> None:
-    resp = await download_video(file_name, connector)
+async def web_scrape_task(url: str, tmpdirname: str, connector: TCPConnector) -> None:
+    resp = await download_video(url, connector)
     if resp.error is None:
         await write_to_file(tmpdirname, resp.content)
     else:
-        click.secho(f"Error download a {file_name}", fg="red")
+        logger.error(
+            f"Cannot download a content, url: {url} error: {type(resp.error).__name__}"
+        )
+
+
+async def read_file(source_file: str) -> List[str]:
+    """
+    Read urls
+    """
+    async with aiofiles.open(source_file, mode="r") as f:
+        content = await f.read()
+    return [url for url in content.split()]
 
 
 @click.command()
@@ -71,7 +75,7 @@ def main() -> None:
     This is the simple web scraper.
     The scraper gets data from sources and saves them to our local machine
 
-    To use this script, you should set the environment variable API_HOST_URL.
+    To use this script, you should set the environment variable CONTENT_FILE.
     Then run `python -m python_demo.downloader`.
     """
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -80,15 +84,29 @@ def main() -> None:
 
 async def async_main() -> None:
     s = time.perf_counter()
+    is_debug_level = os.environ.get("DEBUG", False)
+    if is_debug_level:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    source_file = os.environ.get("CONTENT_FILE", None)
+    if not source_file:
+        logger.error("cannot find the CONTENT_FILE environment variable")
+        return
+
     conn = aiohttp.TCPConnector(limit=5)
     with tempfile.TemporaryDirectory() as tmpdirname:
         await asyncio.gather(
-            *[web_scrape_task(file_name, tmpdirname, conn) for file_name in FILES]
+            *[
+                web_scrape_task(url, tmpdirname, conn)
+                for url in await read_file(source_file)
+            ]
         )
+
     # Close connection
     await conn.close()
     elapsed = time.perf_counter() - s
-    click.secho(f"Execution time: {elapsed:0.2f} seconds.", fg="bright_blue")
+    logger.info(f"Execution time: {elapsed:0.2f} seconds.")
 
 
 if __name__ == "__main__":

@@ -1,25 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
-
-var FILES = []string{
-	"0cf50f1c99234954b00340471538ce9d.MOV",
-	"0db9a58b669048dc999eb8f11f7ba424.MOV",
-	"0d38ceda70b14ccfaf6960514615757f.MOV",
-	"0CB55372-0173-49F7-9EAF-6CF1A40382C5.MOV",
-	"0f132134b2474cbd858559ed979835a3.MOV",
-}
 
 func init() {
 	log.SetOutput(os.Stdout)
@@ -61,35 +52,41 @@ func saveContent(data []byte, tmpDir string) error {
 // The scraper gets data from sources and saves them to our local machine
 // for further analysis
 func main() {
-	hostURL := os.Getenv("API_HOST_URL")
-	if hostURL == "" {
-		log.Error("cannot find the API_HOST_URL environment variable")
-		return
+	start := time.Now()
+
+	sourceFile := os.Getenv("CONTENT_FILE")
+	if sourceFile == "" {
+		log.Fatal("cannot find the CONTENT_FILE environment variable")
 	}
 
-	start := time.Now()
+	isDebuglevel := os.Getenv("DEBUG")
+	if isDebuglevel == "True" || isDebuglevel == "true" {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	file, err := os.Open(sourceFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
 
 	tmpDir, err := ioutil.TempDir("", "demo")
 	if err != nil {
-		log.WithError(err).Error("cannot create tmp directory")
-		return
+		log.WithError(err).Fatal("cannot create tmp directory")
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	wg := sync.WaitGroup{}
-	wg.Add(len(FILES))
 
-	for _, file := range FILES {
-		go func(fileName string) {
+	for scanner.Scan() {
+		wg.Add(1)
+		// Running concurrently
+		go func(fileUrl string) {
 			defer wg.Done()
-			log.Infof("Begin downloading %s", fileName)
+			log.Debugf("Begin downloading %s", fileUrl)
 
-			u, err := url.Parse(hostURL)
-			if err != nil {
-				log.WithError(err).Error("cannot create an url path")
-			}
-			u.Path = path.Join(u.Path, fileName)
-			content, err := downloadContent(u.String())
+			content, err := downloadContent(fileUrl)
 			if err != nil {
 				log.WithError(err).Error("cannot download a content")
 				return
@@ -99,11 +96,15 @@ func main() {
 				log.WithError(err).Error("cannot save a content")
 				return
 			}
-			log.Infof("Finished writing %s", fileName)
-		}(file)
+			log.Debugf("Finished writing %s", fileUrl)
+		}(scanner.Text())
 	}
 	// waiting until all tasks are completed
 	wg.Wait()
+
+	if err := scanner.Err(); err != nil {
+		log.WithError(err).Fatal("cannot read source file")
+	}
 
 	duration := time.Since(start)
 	log.Infof("Execution time: %s seconds.", duration)
