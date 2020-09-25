@@ -1,0 +1,19 @@
+FROM node:12-alpine
+
+LABEL maintainer="Yaroslav Muravskyi <mail@myarik.com>"
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Install app dependencies
+COPY package*.json ./
+RUN npm install --only=production
+
+# Bundle app source
+COPY . .
+
+# Copy the content file
+COPY content_file.txt /content_file.txt
+ENV CONTENT_FILE=/content_file.txt
+
+CMD [ "node", "slow_consumer.js" ]
