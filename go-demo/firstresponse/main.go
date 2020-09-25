@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -43,6 +44,13 @@ func replicaStorage(respCh chan<- apiResponse, storageID string) {
 		log.WithError(err).Error("cannot connect to a host")
 		return
 	}
+	if resp.StatusCode != http.StatusOK {
+		log.WithFields(log.Fields{
+			"storage":       storageID,
+			"response code": resp.StatusCode,
+		}).Errorf("returns error")
+		return
+	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -66,13 +74,35 @@ func main() {
 
 	// Create a channel on which to send the result.
 	respCh := make(chan apiResponse)
+
+	// Set up a done channel
+	wg := sync.WaitGroup{}
+	done := make(chan struct{})
 	// Send requests to multiple replicas, and use the first response.
 	for i := 0; i < 3; i++ {
-		go replicaStorage(respCh, fmt.Sprintf("storage%d", i))
+		storageID := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			replicaStorage(respCh, fmt.Sprintf("storage%d", storageID))
+		}()
 	}
-	resp := <-respCh
-	log.Infof("%s returns the first result", strings.Title(resp.name))
+	go func() {
+		defer close(done)
+		// waiting until all tasks are completed
+		wg.Wait()
+	}()
 
-	duration := time.Since(start)
-	log.Infof("Execution time: %s seconds.", duration)
+	for {
+		select {
+		case <-done:
+			log.Error("Replicas doesn't respond")
+			return
+		case resp := <-respCh:
+			log.Infof("%s returns the first result", strings.Title(resp.name))
+			duration := time.Since(start)
+			log.Infof("Execution time: %s seconds.", duration)
+			return
+		}
+	}
 }
