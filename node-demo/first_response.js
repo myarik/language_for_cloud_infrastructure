@@ -1,17 +1,15 @@
-const http = require('https');
+const http = require('http');
 const os = require('os');
 const fs = require('fs').promises;
-
-const HOST_URL = process.env['API_HOST_URL'];
+const BPromise = require('bluebird');
 
 const STORAGE_MAPPING = {
-    "storage0": "0cf50f1c99234954b00340471538ce9d.MOV",
-    "storage1": "0db9a58b669048dc999eb8f11f7ba424.MOV",
-    "storage2": "0d38ceda70b14ccfaf6960514615757f.MOV"
+    "storage0": "http://212.183.159.230/10MB.zip",
+    "storage1": "http://ipv4.download.thinkbroadband.com/10MB.zip",
+    "storage2": "http://speedtest.tele2.net/10MB.zip"
 }
 
 let cancel = false;
-
 
 async function fetchStorage(storage) {
     const filename = STORAGE_MAPPING[storage];
@@ -19,7 +17,7 @@ async function fetchStorage(storage) {
     return new Promise((resolve, reject) => {
         console.log(`Begin downloading from storage: ${storage}`);
 
-        let req = http.get(HOST_URL + filename, res => {
+        let req = http.get(filename, res => {
             if (res.statusCode !== 200) {
                 return reject(new Error(`Request ${storage} Failed. Status Code: ${res.statusCode}`));
             }
@@ -35,6 +33,8 @@ async function fetchStorage(storage) {
             res.on('end', _ => resolve(body));
             res.on('error', reject);
         });
+
+        req.on('error', reject);
     })
 }
 
@@ -43,17 +43,18 @@ async function fetchStorage(storage) {
 
     const promises = Object.keys(STORAGE_MAPPING).map(async storage => {
         try {
-            await fetchStorage(storage)
+            const body = await fetchStorage(storage)
             console.log(`${storage} returns the first result.`)
         } catch (e) {
             if (!cancel) {
-                console.log(`Task returns an error: ${e.message}`);
+                console.log(`[!] ${storage}. Task returns an error: ${e.message}`);
             }
+            throw e;
         }
     });
 
-    //Getting the first response
-    await Promise.race(promises);
+    await BPromise.some(promises, 1);
     cancel = true;
+
     console.log(`Execution time: ${(Date.now() - time) / 1000} second(s)`);
 })();
