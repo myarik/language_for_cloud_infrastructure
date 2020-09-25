@@ -1,0 +1,15 @@
+{
+  "name": "demo_language_for_cloud_infrastructure",
+  "version": "1.0.0",
+  "description": "",
+  "main": "downloader.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "vingood",
+  "homepage": "https://github.com/myarik/language_for_cloud_infrastructure#readme",
+  "dependencies": {
+    "bluebird": "^3.7.2",
+    "qrate": "^1.2.0"
+  }
+}
