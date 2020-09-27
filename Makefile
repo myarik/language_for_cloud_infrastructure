@@ -1,3 +1,4 @@
+SHELL := /bin/bash # Use bash syntax
 .PHONY: docker_build_downloader docker_build_slow_consumer run_downloader run_slow_consumer
 
 # define standard colors
@@ -15,7 +16,7 @@ RESET := $(shell tput -Txterm sgr0)
 .PHONY: help
 ## help: prints this help message
 help:
-	@echo "Usage: \n"
+	@echo "Usage:"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
 # Build
@@ -68,3 +69,63 @@ run_first_response:
 	${MAKE} -C node-demo run_first_response
 	@echo "${LIGHTPURPLE}Golang${RESET}"
 	${MAKE} -C go-demo run_first_response
+
+## benchmark_downloader: runs the downloader benchmark
+benchmark_downloader:
+	@echo "${YELLOW}Python${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C python-demo run_downloader; \
+        ((number = number + 1)) ; \
+    done
+	@echo "${GREEN}Node${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C node-demo run_downloader; \
+        ((number = number + 1)) ; \
+    done
+	@echo "${LIGHTPURPLE}Golang${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C go-demo run_downloader; \
+        ((number = number + 1)) ; \
+    done
+
+## benchmark_slow_consumer: runs the slow_consumer benchmark
+benchmark_slow_consumer:
+	@echo "${YELLOW}Python${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C python-demo run_slow_consumer; \
+        ((number = number + 1)) ; \
+    done
+	@echo "${GREEN}Node${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C node-demo run_slow_consumer; \
+        ((number = number + 1)) ; \
+    done
+	@echo "${LIGHTPURPLE}Golang${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C go-demo run_slow_consumer; \
+        ((number = number + 1)) ; \
+    done
+
+## benchmark_first_response: runs the first_response benchmark
+benchmark_first_response:
+	@echo "${YELLOW}Python${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C python-demo run_first_response; \
+        ((number = number + 1)) ; \
+    done
+	@echo "${GREEN}Node${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C node-demo run_first_response; \
+        ((number = number + 1)) ; \
+    done
+	@echo "${LIGHTPURPLE}Golang${RESET}"
+	number=1 ; while [[ $$number -le 5 ]] ; do \
+        ${MAKE} -C go-demo run_first_response; \
+        ((number = number + 1)) ; \
+    done
+
+
+## show_size: displays the image sizes
+show_size:
+	docker images --format "{{.Tag}}\t{{.Size}}\t{{.Repository}}" | grep myarik/demo | sort -k 2 -h
+
