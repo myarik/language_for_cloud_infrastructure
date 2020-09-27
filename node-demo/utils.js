@@ -15,7 +15,7 @@ function getBaseNameFromUrl(uri) {
 
 async function fetchFile(filename) {
     return new Promise((resolve, reject) => {
-        console.log(`Begin downloading: ${filename}`);
+        // console.log(`Begin downloading: ${filename}`);
 
         http.get(filename, res => {
             if (res.statusCode !== 200) {

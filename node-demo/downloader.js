@@ -14,7 +14,7 @@ const utils = require('./utils');
         try {
             const body = await utils.fetchFile(url)
             await fs.writeFile(filename, body);
-            console.log(`Finished writing: ${filename}`)
+            // console.log(`Finished writing: ${filename}`)
         } catch (e) {
             console.log(`Error download: ${e.message}`);
         }
