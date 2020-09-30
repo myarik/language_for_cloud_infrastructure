@@ -1,0 +1,478 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Programming language for the cloud infrastructure</title>
+
+    <link rel="stylesheet" href="dist/reset.css">
+    <link rel="stylesheet" href="dist/reveal.css">
+    <link rel="stylesheet" href="dist/theme/cloud.css" id="theme">
+
+    <!-- Theme used for syntax highlighted code -->
+    <link rel="stylesheet" href="plugin/highlight/monokai.css" id="highlight-theme">
+    <script src="plugin/highlight/highlight.js"></script>
+</head>
+<body>
+<div class="reveal">
+    <div class="slides">
+        <section>
+            <h2>Programming language for the cloud infrastructure</h2>
+            <br/>
+            <br/>
+            <br/>
+            <p style="font-size: x-large">
+                <small><a href="http://myarik.com">Yaroslav Muravskyi</a></small>
+                <br/>
+                <small>Grab this session from <a
+                        href="https://github.com/myarik/language_for_cloud_infrastructure">GitHub</a></small>
+            </p>
+        </section>
+        <section>
+            <h3>What are we going to talk about?</h3>
+            <p>
+            <ul>
+                <li class="fragment">What is the cloud infrastructure?</li>
+                <li class="fragment">What does it mean to use the cloud efficiently?
+                </li>
+                <li class="fragment">Discussing how the different
+                    languages resolve daily tasks, the advantages, and disadvantages of
+                    each solution
+                </li>
+            </ul>
+        </section>
+        <section>
+            <section>
+                <h3>What is cloud infrastructure?</h3>
+            </section>
+            <section>
+                The cloud infrastructure is a term used to describe the components
+                needed for cloud computing, which includes: <i class="fragment">hardware,</i>
+                <i class="fragment">abstracted resources,</i> <i class="fragment">storage,</i>
+                <i class="fragment">and network resources.</i>
+            </section>
+        </section>
+        <section>
+            <section>
+                <h3>What does it mean to use the cloud efficiently?</h3>
+            </section>
+            <section>
+                <ul>
+                    <li>A program should allocate resources efficiently</li>
+                    <ul class="fragment">
+                        <li style="font-size: x-large">a simple program should take a
+                            reasonable amount of resources memory and cpu
+                        </li>
+                    </ul>
+                    <br>
+                    <li class="fragment">A program should take a reasonable amount of
+                        storage
+                    </li>
+                    <ul style="font-size: x-large">
+                        <li class="fragment">docker size (ECS cluster)</li>
+                        <li class="fragment">artifact size (AWS Lambda)</li>
+                        <li class="fragment">project size (EC2 instance)</li>
+                    </ul>
+                    <br>
+                    <li class="fragment">Effectively handle I/O operations</li>
+                    <ul style="font-size: x-large">
+                        <li class="fragment">communication between services</li>
+                        <li class="fragment">communication with external resources</li>
+                    </ul>
+                </ul>
+            </section>
+        </section>
+        <!--Downloader-->
+        <section>
+            <section>
+                <h3>Downloader</h3>
+                <p class="fragment">
+                    Create an asynchronous program for downloading and storing content.
+                </p>
+            </section>
+            <section>
+                <img src="image/downloader_schema.png">
+                <p style="font-size: large">Schema</p>
+            </section>
+            <section>
+                Python implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="12-17|1-6">
+    async def web_scrape_task(url: str, tmpdirname: str, connector: TCPConnector) -> None:
+        //await the result
+        resp = await download_video(url, connector)
+        if resp.error is None:
+            //await the result
+            await write_to_file(tmpdirname, resp.content)
+        else:
+            logger.error(
+                f"Cannot download a content, url: {url} error: {type(resp.error).__name__}"
+            )
+    //waits for all of them to finish
+    await asyncio.gather(
+        *[
+            web_scrape_task(url, tmpdirname, conn)
+            for url in await read_file(source_file)
+        ]
+    )
+                </code></pre>
+            </section>
+            <section>
+                Node implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="1|5-11">
+    await Promise.all(fileNames.map(async url => {
+        const baseName = utils.getBaseNameFromUrl(url);
+        const filename = `${os.tmpdir()}/${baseName}`;
+
+        try {
+            const body = await utils.fetchFile(url)
+            await fs.writeFile(filename, body);
+            // console.log(`Finished writing: ${filename}`)
+        } catch (e) {
+            console.log(`Error download: ${e.message}`);
+        }
+    }));
+                </code></pre>
+            </section>
+            <section>
+                Go implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="1|2-17|19">
+        wg := sync.WaitGroup{}
+        for scanner.Scan() {
+            wg.Add(1)
+            // Running concurrently
+            go func(fileUrl string) {
+                defer wg.Done()
+                content, err := downloadContent(fileUrl)
+                if err != nil {
+                    log.WithError(err).Error("cannot download a content")
+                    return
+                }
+                if err := saveContent(content, tmpDir); err != nil {
+                    log.WithError(err).Error("cannot save a content")
+                    return
+                }
+            }(scanner.Text())
+        }
+        // waiting until all tasks are completed
+        wg.Wait()
+                </code></pre>
+            </section>
+            <section>
+                Benchmark
+                <div class="r-stack">
+                    <img class="fragment fade-out" data-fragment-index="0"
+                         src="image/benchmark_downloader.png">
+                    <img class="fragment current-visible" data-fragment-index="0" img
+                         src="image/benchmark_downloader_memory.png">
+                    <img class="fragment" img
+                         src="image/benchmark_downloader_docker_size.png">
+                </div>
+            </section>
+
+        </section>
+        <!--Slow consumer-->
+        <section>
+            <section>
+                <h3>Slow consumer</h3>
+                <p class="fragment">
+                    Create an asynchronous program for downloading and storing content.
+                    Consider that only three consumers can run simultaneously and a
+                    producer
+                    shouldn't start a download process if all consumers are busy.
+                </p>
+            </section>
+            <section>
+                <img src="image/slow_consumer.png">
+                <p style="font-size: large">Schema</p>
+            </section>
+            <section>
+                Python implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="14-15|20-23|25-26|1-6|8-12|27-34">
+    async def content_producer(source_file: str, queue: asyncio.Queue, connector: aiohttp.TCPConnector) -> None:
+        ...
+        async with session.get(url) as resp:
+            body = await resp.read()
+            # put the item in the queue
+            await queue.put(body)
+
+    async def content_consumer(worker_id: int, queue: asyncio.Queue, tmpdir: str) -> None:
+        while True:
+            content = await queue.get()
+            ...
+            queue.task_done()
+
+    async def async_main() -> None:
+        queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=3)
+        connector = aiohttp.TCPConnector(limit=5)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create three worker tasks to process the queue concurrently.
+            tasks = []
+            for index in range(3):
+                task = asyncio.create_task(content_consumer(index, queue, tmpdir))
+                tasks.append(task)
+
+            # Wait until the tasks is fully processed
+            await asyncio.gather(content_producer(source_file, queue, connector))
+            # Wait until the queue is fully processed.
+            await queue.join()
+
+            # Cancel our worker tasks.
+            for task in tasks:
+                task.cancel()
+            # Wait until all worker tasks are cancelled.
+            await asyncio.gather(*tasks, return_exceptions=True)
+                </code></pre>
+            </section>
+            <section>
+                Node implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="6,16|9-15">
+    (async _ => {
+        const time = Date.now();
+
+        const fileNames = await utils.getFileList(process.env.CONTENT_FILE);
+
+        await BPromise.map(fileNames, async url => {
+            const baseName = utils.getBaseNameFromUrl(url);
+            const filename = `${os.tmpdir()}/${baseName}`;
+            try {
+                const body = await utils.fetchFile(url)
+                await fs.writeFile(filename, body);
+                // console.log(`Finished writing: ${filename}`)
+            } catch (e) {
+                console.debug(`Error download: ${e.message}`);
+            }
+        }, {concurrency: CONCURRENCY_LEVEL});
+        console.log(`Execution time: ${(Date.now() - time) / 1000} second(s)`);
+    })();
+                </code></pre>
+            </section>
+            <section>
+                Go implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="21-22|1-7|18-19,23-28|9-14|29-32">
+    func contentProducer(sourceFile string) <-chan []byte {
+	    bodyCh := make(chan []byte)
+	    go func() {
+            ...
+        }
+        return bodyCh
+    }
+
+    func contentConsumer(done chan<- struct{}, bodyCh <-chan []byte, tmpDir string, workerID int) {
+        for data := range bodyCh {
+            ...
+        }
+        done <- struct{}{}
+    }
+
+    func main() {
+        // Set up a done channel
+        done := make(chan struct{})
+        defer close(done)
+
+        //Stat producer
+        bodyCh := contentProducer(sourceFile)
+        // Start consumers
+        for i := 0; i < DefaultNumConsumer; i++ {
+            go func(workerID int) {
+                contentConsumer(done, bodyCh, tmpDir, workerID)
+            }(i)
+        }
+        // Wait until all consumers finished work
+        for i := 0; i < DefaultNumConsumer; i++ {
+            <-done
+        }
+    }
+                </code></pre>
+            </section>
+            <section>
+                Benchmark
+                <div class="r-stack">
+                    <img class="fragment fade-out" data-fragment-index="0"
+                         src="image/benchmark_slow_consumer.png">
+                    <img class="fragment current-visible" data-fragment-index="0" img
+                         src="image/benchmark_slow_consumer_memory.png">
+                    <img class="fragment" img
+                         src="image/benchmark_slow_consumer_docker_size.png">
+                </div>
+            </section>
+
+        </section>
+        <!--First response-->
+        <section>
+            <section>
+                <h3>First response</h3>
+                <p class="fragment">
+                    Create an asynchronous program for getting the first response from
+                    the multiple replicas.
+                </p>
+            </section>
+            <section>
+                <img src="image/first_response.png">
+                <p style="font-size: large">Schema</p>
+            </section>
+            <section>
+                Python implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="7-13|1-4|13-23">
+    async def replica_storage(storage: str) -> Result:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(STORAGE_MAPPING[storage]) as resp:
+                return Result(storage, content=await resp.read())
+
+    async def async_main() -> None:
+        tasks = [
+            asyncio.create_task(replica_storage(f"storage{index}")) for index in range(3)
+        ]
+        done, pending = await asyncio.wait(
+            tasks, timeout=5.0, return_when=asyncio.FIRST_COMPLETED
+        )
+        # The first response
+        for task in done:
+            try:
+                result = task.result()
+                logger.info(f"{result.storage.title()} returns the first result")
+            except Exception as e:
+                logger.error(f"Task returns an error {repr(e)}")
+            else:
+                break
+        else:
+            logger.error("Timeout error")
+                </code></pre>
+            </section>
+            <section>
+                Node implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="8-15|1-6|17-19">
+    async function fetchStorage(storage) {
+        const filename = STORAGE_MAPPING[storage];
+        return new Promise((resolve, reject) => {
+            ...
+        })
+    }
+    (async _ => {
+        const promises = Object.keys(STORAGE_MAPPING).map(async storage => {
+            try {
+                const body = await fetchStorage(storage)
+                console.log(`${storage} returns the first result.`)
+            } catch (e) {
+                ...
+            }
+        });
+
+        await BPromise.some(promises, 1);
+        cancel = true;
+        console.log(`Execution time: ${(Date.now() - time) / 1000} second(s)`);
+    })();
+                </code></pre>
+            </section>
+            <section>
+                Go implementation
+                <pre><code style="max-height:600px;" data-trim data-noescape
+                           data-line-numbers="2-3|9-17|25-36">
+    func main() {
+        // Create a channel on which to send the result.
+        respCh := make(chan apiResponse)
+
+        // Set up a done channel
+        wg := sync.WaitGroup{}
+        done := make(chan struct{})
+
+        // Send requests to multiple replicas, and use the first response.
+        for i := 0; i < 3; i++ {
+            storageID := i
+            wg.Add(1)
+            go func() {
+                defer wg.Done()
+                replicaStorage(respCh, fmt.Sprintf("storage%d", storageID))
+            }()
+        }
+
+        go func() {
+            defer close(done)
+            // waiting until all tasks are completed
+            wg.Wait()
+        }()
+
+        for {
+            select {
+            case <-done:
+                log.Error("Replicas doesn't respond")
+                return
+            case resp := <-respCh:
+                log.Infof("%s returns the first result", strings.Title(resp.name))
+                duration := time.Since(start)
+                log.Infof("Execution time: %s seconds.", duration)
+                return
+            }
+        }
+    }
+                </code></pre>
+            </section>
+            <section>
+                Benchmark
+                <div class="r-stack">
+                    <img class="fragment fade-out" data-fragment-index="0"
+                         src="image/benchmark_first_response.png">
+                    <img class="fragment current-visible" data-fragment-index="0" img
+                         src="image/benchmark_first_response_memory.png">
+                    <img class="fragment" img
+                         src="image/benchmark_first_response_docker_size.png">
+                </div>
+            </section>
+
+        </section>
+        <section>
+            <h3>Summary</h3>
+            <img src="image/benchmark_summary.png">
+        </section>
+        <section>
+            As you can see, it’s quite hard to say for sure whether Node.js, Python or Golang is better.
+            It greatly depends on the type and characteristics of the app you want to create.
+            Each task requires the right tool, and Python, Go and Node.js are good at different things.
+        </section>
+        <section>
+            <h2>Thanks</h2>
+            <br/>
+            <p style="font-size: x-large">
+            <b>Sources:</b> <a href="https://github.com/myarik/language_for_cloud_infrastructure">github</a>
+            </p>
+            <p style="font-size: x-large">
+            <b>Slides:</b> <a href="https://github.com/myarik/language_for_cloud_infrastructure">link</a>
+            </p>
+        </section>
+    </div>
+</div>
+
+<script src="dist/reveal.js"></script>
+<script src="plugin/notes/notes.js"></script>
+<script src="plugin/markdown/markdown.js"></script>
+<script src="plugin/highlight/highlight.js"></script>
+<script>
+    // More info about initialization & config:
+    // - https://revealjs.com/initialization/
+    // - https://revealjs.com/config/
+    Reveal.initialize({
+        hash: true,
+        progress: true,
+        // Display presentation control arrows
+        controls: true,
+        // Vertical centering of slides
+        center: true,
+        margin: 0.1,
+        minScale: 0.3,
+        maxScale: 1.0,
+        // Learn about plugins: https://revealjs.com/plugins/
+        plugins: [RevealMarkdown, RevealHighlight, RevealNotes]
+    });
+</script>
+</body>
+</html>
