@@ -1,6 +1,6 @@
 # Language for cloud infrastructure 
 
-This repository contains the presentation and sample codes written in Go, Python, Node 
+This repository contains the [presentation](https://www.slideshare.net/YaroslavMuravskiy/programming-language-for-the-cloud-infrastructure-238708126) and sample codes written in Go, Python, Node 
 which demonstrates how to resolve some tasks using concurrency.  
 
 ## Downloader
